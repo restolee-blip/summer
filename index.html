@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💧 물방울의 여행</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gaegu:wght@700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Jua',sans-serif;overflow:hidden;background:#e8f4ff}
+
+/* ─── 게임 화면 ─── */
+#game{position:fixed;inset:0;display:none}
+.zone{position:absolute;top:0;bottom:0;overflow:hidden}
+#z1{left:0;width:100%}
+#z2{right:0;width:50%;display:none}
+.zbg{position:absolute;inset:0}
+#z1 .zbg{background:linear-gradient(160deg,#cdeafe,#a8d8f8,#7ec3ef)}
+#z2 .zbg{background:linear-gradient(160deg,#d6f0ff,#aadcf8,#88c8f0)}
+.ztree{position:absolute;bottom:0;left:0;width:100%;height:45%;pointer-events:none;z-index:1}
+.zvid{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;
+  opacity:.22;transform:scaleX(-1);z-index:2;pointer-events:none;display:none}
+/* 2인 모드일 때 js로 2배 너비 적용 */
+.zcanvas{position:absolute;inset:0;z-index:3;pointer-events:none}
+
+/* HUD */
+.zhud{position:absolute;top:0;left:0;right:0;z-index:10;pointer-events:none;
+  display:flex;justify-content:space-between;align-items:center;padding:10px 16px}
+#z1 .zhud{background:linear-gradient(to bottom,rgba(200,230,255,.92),transparent)}
+#z2 .zhud{background:linear-gradient(to bottom,rgba(190,225,255,.92),transparent)}
+.zpname{font-family:'Gaegu',cursive;font-size:14px;font-weight:700;
+  padding:4px 14px;border-radius:20px}
+#z1 .zpname{background:#56b4f7;color:#fff}
+#z2 .zpname{background:#88c8f0;color:#0a3a60}
+.zscore{font-size:30px;color:#5a3a3a}
+.ztimer{font-size:26px;color:#5a3a3a}
+.ztimer.urg{color:#e86060;animation:urg .4s infinite alternate}
+@keyframes urg{to{transform:scale(1.15)}}
+.ztbar{position:absolute;bottom:0;left:0;right:0;height:6px;z-index:10}
+#z1 .ztbar{background:linear-gradient(to right,#a0d8ff,#2a90e0)}
+#z2 .ztbar{background:linear-gradient(to right,#ffe066,#c8a000)}
+.zcombo{position:absolute;top:90px;left:50%;transform:translateX(-50%);
+  text-align:center;z-index:10;pointer-events:none;white-space:nowrap;
+  font-size:22px;text-shadow:2px 2px 0 #fff;opacity:0;transition:opacity .2s}
+.zcombo.show{opacity:1}
+#z1 .zcombo{color:#e85d8a}
+#z2 .zcombo{color:#c8a000}
+.spop{position:absolute;z-index:15;font-size:22px;text-shadow:2px 2px 0 #fff;
+  pointer-events:none;animation:spop .8s ease-out forwards;white-space:nowrap}
+@keyframes spop{0%{opacity:1;transform:translateY(0) scale(1)}
+  100%{opacity:0;transform:translateY(-50px) scale(1.3)}}
+.spop.p1{color:#e85d8a}.spop.p2{color:#c8a000}.spop.bad{color:#e86060;font-size:18px}
+#divider{position:absolute;top:0;bottom:0;left:50%;width:5px;z-index:20;
+  transform:translateX(-50%);display:none;
+  background:linear-gradient(to bottom,transparent,rgba(255,180,80,.8) 15%,rgba(255,180,80,.9) 85%,transparent)}
+
+/* ─── 오버레이 (공통) ─── */
+.screen{position:fixed;inset:0;z-index:50;display:none;
+  flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(155deg,rgba(255,244,230,.98),rgba(255,228,236,.98))}
+.screen.active{display:flex}
+
+/* 시작화면 */
+#stitle{font-size:clamp(36px,7vw,70px);color:#5a3a3a;margin-bottom:6px;
+  text-shadow:3px 3px 0 #fff,5px 5px 0 #f9a8c0;
+  animation:pop .6s cubic-bezier(.36,1.5,.5,1)}
+@keyframes pop{from{transform:scale(.5) rotate(-5deg);opacity:0}to{transform:scale(1);opacity:1}}
+#ssub{font-family:'Gaegu',cursive;font-size:16px;color:#c47c5a;margin-bottom:22px}
+
+/* 선택 버튼 */
+.row{display:flex;gap:10px;margin-bottom:14px;justify-content:center;flex-wrap:wrap}
+.sel-btn{padding:11px 18px;border:3px solid #f9a8c0;border-radius:18px;background:#fff;
+  font-family:'Jua',sans-serif;font-size:13px;color:#5a3a3a;cursor:pointer;
+  transition:all .2s;box-shadow:0 3px 10px rgba(0,0,0,.1);text-align:center;min-width:120px}
+.sel-btn span{display:block;font-family:'Gaegu',cursive;font-size:11px;margin-top:2px;opacity:.8}
+.sel-btn.on{border-color:transparent;color:#fff;
+  background:linear-gradient(135deg,#f9a8c0,#ffcba4)}
+.sel-btn.on.m2{background:linear-gradient(135deg,#f9a8c0,#ffd93d)}
+.sel-btn.on.s2{background:linear-gradient(135deg,#a8d5a2,#6abf69)}
+
+/* 시간 입력 */
+.tbox{background:rgba(255,255,255,.92);border:3px solid #ffcba4;border-radius:20px;
+  padding:13px 26px;margin-bottom:16px;text-align:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.1)}
+.tbox label{font-family:'Gaegu',cursive;font-size:13px;color:#c47c5a;
+  display:block;margin-bottom:8px}
+.trow{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:8px}
+#tinput{width:80px;font-family:'Jua',sans-serif;font-size:26px;color:#5a3a3a;
+  border:3px solid #f9a8c0;border-radius:12px;padding:5px 8px;
+  text-align:center;background:#fff;outline:none}
+.tunit{font-family:'Gaegu',cursive;font-size:15px;color:#c47c5a}
+.tbtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.tbtn{padding:6px 12px;border:2px solid #f9a8c0;border-radius:50px;background:#fff;
+  font-family:'Jua',sans-serif;font-size:12px;color:#5a3a3a;cursor:pointer;transition:all .15s}
+.tbtn:hover{background:#f9a8c0;color:#fff}
+
+/* 주요 버튼 */
+.btn-main{padding:14px 48px;background:linear-gradient(135deg,#f9a8c0,#ffcba4);
+  border:none;border-radius:50px;font-family:'Jua',sans-serif;font-size:18px;color:#fff;
+  cursor:pointer;letter-spacing:2px;box-shadow:0 6px 20px rgba(249,168,192,.5);transition:all .2s}
+.btn-main:hover{transform:scale(1.06) translateY(-2px)}
+.btn-sub{padding:10px 30px;background:transparent;border:3px solid #f9a8c0;
+  border-radius:50px;font-family:'Jua',sans-serif;font-size:14px;color:#f9a8c0;
+  cursor:pointer;transition:all .2s;margin-top:8px}
+.btn-sub:hover{background:rgba(249,168,192,.1)}
+.inst{margin-top:12px;font-family:'Gaegu',cursive;font-size:12px;
+  color:#c47c5a;text-align:center;line-height:2}
+
+/* 꽃 선택 팝업 */
+#fpop{position:fixed;inset:0;z-index:60;display:none;
+  align-items:center;justify-content:center;
+  background:rgba(60,20,40,.55);backdrop-filter:blur(8px)}
+#fpop.active{display:flex}
+.fpbox{background:linear-gradient(155deg,#fff8f0,#fff0f5);border:4px solid #f9a8c0;
+  border-radius:28px;padding:26px 28px;max-width:440px;width:94%;text-align:center;
+  box-shadow:0 18px 50px rgba(200,100,120,.38);animation:popIn .4s cubic-bezier(.36,1.4,.5,1)}
+@keyframes popIn{from{transform:scale(.65);opacity:0}to{transform:scale(1);opacity:1}}
+.fp-title{font-size:18px;color:#5a3a3a;margin-bottom:4px}
+.fp-sub{font-family:'Gaegu',cursive;font-size:12px;color:#c47c5a;margin-bottom:12px}
+.fp-who{font-family:'Gaegu',cursive;font-size:12px;display:inline-block;
+  padding:4px 14px;border-radius:20px;margin-bottom:12px}
+.fp-who.w1{background:rgba(249,168,192,.25);color:#c47c5a}
+.fp-who.w2{background:rgba(255,217,61,.25);color:#8a6000}
+.fp-grid{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:14px}
+.fp-btn{width:76px;padding:8px 4px;border-radius:14px;border:3px solid rgba(200,150,150,.3);
+  background:#fff;cursor:pointer;transition:all .2s;text-align:center}
+.fp-btn:hover{transform:translateY(-3px)}
+.fp-btn.on{border-color:#f9a8c0;background:rgba(249,168,192,.1);transform:translateY(-3px)}
+.fp-ico{font-size:26px;display:block;margin-bottom:3px}
+.fp-name{font-family:'Gaegu',cursive;font-size:11px;color:#5a3a3a}
+.fp-ok{padding:10px 32px;background:linear-gradient(135deg,#f9a8c0,#ffcba4);
+  border:none;border-radius:50px;font-family:'Jua',sans-serif;font-size:15px;color:#fff;
+  cursor:pointer;transition:all .2s}
+.fp-ok:hover{transform:scale(1.05)}
+
+/* 카메라 팝업 */
+#cpop{position:fixed;inset:0;z-index:60;display:none;
+  align-items:center;justify-content:center;
+  background:rgba(60,20,40,.5);backdrop-filter:blur(8px)}
+#cpop.active{display:flex}
+.cpbox{background:linear-gradient(155deg,#fff8f0,#fff0f5);border:4px solid #f9a8c0;
+  border-radius:28px;padding:28px 32px;max-width:350px;width:92%;text-align:center;
+  box-shadow:0 16px 44px rgba(200,100,120,.35);animation:popIn .4s cubic-bezier(.36,1.4,.5,1)}
+.cp-ico{font-size:46px;margin-bottom:10px}
+.cp-title{font-size:18px;color:#5a3a3a;margin-bottom:8px}
+.cp-desc{font-family:'Gaegu',cursive;font-size:13px;color:#c47c5a;line-height:2;margin-bottom:20px}
+.cp-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.cp-allow{padding:11px 22px;background:linear-gradient(135deg,#f9a8c0,#ffcba4);
+  border:none;border-radius:50px;font-family:'Jua',sans-serif;font-size:14px;color:#fff;cursor:pointer}
+.cp-allow:hover{transform:scale(1.05)}
+.cp-skip{padding:11px 18px;background:#fff;border:3px solid #f9a8c0;border-radius:50px;
+  font-family:'Jua',sans-serif;font-size:13px;color:#5a3a3a;cursor:pointer}
+.cp-skip:hover{transform:scale(1.05)}
+
+/* 로딩 */
+#loading{z-index:55}
+.lico{font-size:44px;animation:spin 1.2s linear infinite;margin-bottom:14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltxt{font-family:'Gaegu',cursive;font-size:18px;color:#c47c5a}
+.lsub{font-family:'Gaegu',cursive;font-size:12px;color:#b08070;margin-top:4px}
+
+/* 결과 */
+#result{z-index:55}
+#result h2{font-size:clamp(26px,5vw,52px);color:#5a3a3a;
+  text-shadow:3px 3px 0 #fff,4px 4px 0 #f9a8c0;margin-bottom:10px}
+.win-txt{font-size:20px;margin-bottom:16px;text-shadow:2px 2px 0 #fff}
+.rcards{display:flex;gap:18px;margin-bottom:20px;flex-wrap:wrap;justify-content:center}
+.rcard{background:rgba(255,255,255,.9);border-radius:22px;padding:16px 24px;
+  text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.1);min-width:130px}
+.rcard.p1{border:3px solid #f9a8c0}.rcard.p2{border:3px solid #ffd93d}
+.rcard.win{transform:scale(1.07)}
+.rcard-name{font-family:'Gaegu',cursive;font-size:13px;color:#c47c5a;margin-bottom:4px}
+.rcard-score{font-size:clamp(40px,7vw,72px);line-height:1;margin-bottom:4px}
+.rcard.p1 .rcard-score{color:#e85d8a}.rcard.p2 .rcard-score{color:#c8a000}
+.rcard-combo{font-family:'Gaegu',cursive;font-size:12px;color:#c47c5a}
+.btn-col{display:flex;flex-direction:column;align-items:center;gap:8px}
+
+/* 데코 꽃잎 */
+.deco-petal{position:absolute;top:-24px;pointer-events:none;
+  animation:decofall linear infinite}
+@keyframes decofall{to{transform:translateY(114vh) rotate(540deg)}}
+</style>
+</head>
+<body>
+
+<!-- ═══ 게임 화면 ═══ -->
+<div id="game">
+  <!-- Zone 1 -->
+  <div class="zone" id="z1">
+    <div class="zbg"></div>
+    <svg class="ztree" viewBox="0 0 600 280" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="510" cy="70" r="46" fill="#ffe066" opacity=".5"/>
+      <circle cx="510" cy="70" r="62" fill="#ffe066" opacity=".22"/>
+      <ellipse cx="120" cy="210" rx="74" ry="40" fill="#ffffff" opacity=".55"/>
+      <ellipse cx="70" cy="220" rx="48" ry="30" fill="#ffffff" opacity=".5"/>
+      <ellipse cx="170" cy="220" rx="50" ry="30" fill="#ffffff" opacity=".5"/>
+      <ellipse cx="430" cy="235" rx="66" ry="34" fill="#ffffff" opacity=".48"/>
+      <ellipse cx="390" cy="244" rx="42" ry="26" fill="#ffffff" opacity=".44"/>
+    </svg>
+    <div class="zgnd" style="position:absolute;bottom:0;left:0;right:0;height:60px;z-index:1;border-radius:60% 60% 0 0/26px 26px 0 0;opacity:.42;background:linear-gradient(to top,#3aa0ec,#7ec8ff 55%,transparent)"></div>
+    <video class="zvid" id="vid1" autoplay playsinline muted></video>
+    <canvas class="zcanvas" id="cv1"></canvas>
+    <div class="zhud">
+      <div class="zpname">💧 P1</div>
+      <div class="zscore" id="sc1">0</div>
+      <div class="ztimer" id="tm1">60</div>
+    </div>
+    <div class="zcombo" id="cb1">🎀 콤보 × <span id="cn1">2</span> &nbsp;<small id="cm1" style="font-size:14px"></small></div>
+    <div class="ztbar" id="tb1" style="width:100%;position:absolute;bottom:0;height:6px;z-index:10;transition:width 1s linear"></div>
+  </div>
+
+  <!-- Zone 2 -->
+  <div class="zone" id="z2">
+    <div class="zbg"></div>
+    <svg class="ztree" viewBox="0 0 600 280" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="90" cy="74" r="44" fill="#ffe066" opacity=".48"/>
+      <circle cx="90" cy="74" r="60" fill="#ffe066" opacity=".2"/>
+      <ellipse cx="470" cy="208" rx="76" ry="40" fill="#ffffff" opacity=".55"/>
+      <ellipse cx="420" cy="218" rx="48" ry="30" fill="#ffffff" opacity=".5"/>
+      <ellipse cx="524" cy="218" rx="50" ry="30" fill="#ffffff" opacity=".5"/>
+      <ellipse cx="170" cy="236" rx="64" ry="34" fill="#ffffff" opacity=".46"/>
+      <ellipse cx="128" cy="244" rx="42" ry="26" fill="#ffffff" opacity=".42"/>
+    </svg>
+    <div class="zgnd" style="position:absolute;bottom:0;left:0;right:0;height:60px;z-index:1;border-radius:60% 60% 0 0/26px 26px 0 0;opacity:.42;background:linear-gradient(to top,#2a90e0,#88c8f0 55%,transparent)"></div>
+    <video class="zvid" id="vid2" autoplay playsinline muted></video>
+    <canvas class="zcanvas" id="cv2"></canvas>
+    <div class="zhud">
+      <div class="zpname">☁️ P2</div>
+      <div class="zscore" id="sc2">0</div>
+      <div class="ztimer" id="tm2">60</div>
+    </div>
+    <div class="zcombo" id="cb2" style="color:#2a90e0">☁️ 콤보 × <span id="cn2">2</span> &nbsp;<small id="cm2" style="font-size:14px"></small></div>
+    <div class="ztbar" id="tb2" style="width:100%;position:absolute;bottom:0;height:6px;z-index:10;transition:width 1s linear;background:linear-gradient(to right,#ffe066,#c8a000)"></div>
+  </div>
+
+  <div id="divider"></div>
+</div>
+
+<!-- ═══ 시작화면 ═══ -->
+<div class="screen active" id="startscreen">
+  <div id="sdeco" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0"></div>
+  <div id="stitle">💧 물방울의 여행</div>
+  <div id="ssub">물의 여행을 함께 떠나요!</div>
+
+  <div class="row">
+    <button class="sel-btn on" id="bm1" onclick="setMode(1)">👤 1인 모드<span>혼자 플레이</span></button>
+    <button class="sel-btn m2" id="bm2" onclick="setMode(2)">👥 2인 대전<span>화면 분할</span></button>
+  </div>
+  <div class="row">
+    <button class="sel-btn on s1" id="bs1" onclick="setStep(1)">💧 STEP 1<span>한 가지만 잡기</span></button>
+    <button class="sel-btn s2"   id="bs2" onclick="setStep(2)">🍂 STEP 2<span>낙엽 피하기</span></button>
+  </div>
+  <div class="tbox">
+    <label>⏱ 게임 시간</label>
+    <div class="trow">
+      <input id="tinput" type="number" value="60" min="5" max="600">
+      <span class="tunit">초</span>
+    </div>
+    <div class="tbtns">
+      <button class="tbtn" onclick="setT(15)">15초</button>
+      <button class="tbtn" onclick="setT(30)">30초</button>
+      <button class="tbtn" onclick="setT(60)">1분</button>
+      <button class="tbtn" onclick="setT(90)">1분30초</button>
+      <button class="tbtn" onclick="setT(120)">2분</button>
+    </div>
+  </div>
+  <button class="btn-main" onclick="onStart()">💧 여행 시작!</button>
+  <div class="inst" id="inst">물방울을 잡으면 점수 UP! 연속으로 잡으면 콤보~ 💦</div>
+</div>
+
+<!-- ═══ 꽃 선택 팝업 ═══ -->
+<div id="fpop">
+  <div class="fpbox">
+    <div class="fp-title">💧 무엇을 잡을까요?</div>
+    <div class="fp-sub" id="fp-sub">햇님·물방울·구름 중에 골라요!</div>
+    <div class="fp-who w1" id="fp-who">💧 플레이어 1</div>
+    <div class="fp-grid" id="fp-grid"></div>
+    <button class="fp-ok" onclick="fpConfirm()">✅ 선택 완료!</button>
+  </div>
+</div>
+
+<!-- ═══ 카메라 팝업 ═══ -->
+<div id="cpop">
+  <div class="cpbox">
+    <div class="cp-ico">📷</div>
+    <div class="cp-title">카메라 권한이 필요해요!</div>
+    <div class="cp-desc">손으로 물방울을 잡으려면<br>카메라를 허용해 주세요 💧<br><small style="color:#b08070">(영상은 저장되지 않아요)</small></div>
+    <div class="cp-btns">
+      <button class="cp-allow" onclick="camAllow()">✅ 카메라 허용</button>
+      <button class="cp-skip"  onclick="camSkip()">🖱️ 마우스로 하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 로딩 ═══ -->
+<div class="screen" id="loading">
+  <div class="lico">💧</div>
+  <div class="ltxt" id="ltxt">카메라 연결 중...</div>
+  <div class="lsub" id="lsub">브라우저 허용 버튼을 눌러주세요!</div>
+</div>
+
+<!-- ═══ 결과 ═══ -->
+<div class="screen" id="result">
+  <div id="rdeco" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0"></div>
+  <h2>💧 여행 끝!</h2>
+  <div class="win-txt" id="win-txt"></div>
+  <div class="rcards">
+    <div class="rcard p1" id="rc1">
+      <div class="rcard-name">💧 플레이어 1</div>
+      <div class="rcard-score" id="rs1">0</div>
+      <div class="rcard-combo">최대 콤보 <span id="rmc1">0</span>번</div>
+    </div>
+    <div class="rcard p2" id="rc2" style="display:none">
+      <div class="rcard-name">☁️ 플레이어 2</div>
+      <div class="rcard-score" id="rs2">0</div>
+      <div class="rcard-combo">최대 콤보 <span id="rmc2">0</span>번</div>
+    </div>
+  </div>
+  <div class="btn-col">
+    <button class="btn-main" onclick="retry()">🔄 다시 하기</button>
+    <button class="btn-sub"  onclick="goHome()">🏠 처음으로 돌아가기</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+//  꽃 데이터
+// ════════════════════════════════════════════════════
+const FL = {
+  sun:{
+    name:'햇님', ico:'☀️',
+    fills:['#ffe066','#ffd93d','#ffec80','#ffcc33'],
+    strks:['#ffaa00','#ff9500','#ffb820','#ff8c00'],
+    center:'#fff4b0', cdot:'#ff9500',
+    tbar:'linear-gradient(to right,#ffec80,#ffaa00)',
+  },
+  drop:{
+    name:'물방울', ico:'💧',
+    fills:['#7ec8ff','#56b4f7','#a0d8ff','#3aa0ec'],
+    strks:['#2a90e0','#1a78c8','#4aa0e8','#0f68b8'],
+    center:'#e0f4ff', cdot:'#2a90e0',
+    tbar:'linear-gradient(to right,#a0d8ff,#2a90e0)',
+  },
+  cloud:{
+    name:'구름', ico:'☁️',
+    fills:['#d4dae2','#c4ccd6','#dde2ea','#b8c2ce'],
+    strks:['#8a96a6','#788698','#929dae','#6f7d90'],
+    center:'#e6eaf0', cdot:'#8a96a6',
+    tbar:'linear-gradient(to right,#dde2ea,#8a96a6)',
+  },
+};
+const GF=['#e8a85c','#d4894a','#c97b3a','#e0975a'];
+const GS=['#a85e28','#964e1e','#b06a30','#854818'];
+
+// ════════════════════════════════════════════════════
+//  상태 변수 (모두 선언 먼저!)
+// ════════════════════════════════════════════════════
+let MODE=1, STEP=1, SEL_TIME=60;       // 설정
+let DURATION=60, running=false;         // 게임
+let timerInt=null, lastTs=0, hudTs=0;  // 루프
+let CW=window.innerWidth, CH=window.innerHeight; // 캔버스 크기
+
+// 플레이어
+const PS=[
+  {score:0,combo:0,maxC:0,tLeft:60,petals:[],parts:[],acc:0,hand:[]},
+  {score:0,combo:0,maxC:0,tLeft:60,petals:[],parts:[],acc:0,hand:[]},
+];
+
+// 꽃 선택
+let fpStep=0;
+let chosen=['drop','cloud'];
+const FD=[FL.drop, FL.cloud];
+
+// ════════════════════════════════════════════════════
+//  캔버스
+// ════════════════════════════════════════════════════
+const cv1=document.getElementById('cv1');
+const cv2=document.getElementById('cv2');
+const ctx1=cv1.getContext('2d');
+const ctx2=cv2.getContext('2d');
+
+function updateCanvasSize(){
+  CW = MODE===1 ? window.innerWidth : Math.floor(window.innerWidth/2);
+  CH = window.innerHeight;
+  cv1.width=CW; cv1.height=CH;
+  cv2.width=CW; cv2.height=CH;
+}
+window.addEventListener('resize', updateCanvasSize);
+
+// ════════════════════════════════════════════════════
+//  화면 전환 (단순하게!)
+// ════════════════════════════════════════════════════
+function showScreen(id){
+  ['startscreen','loading','result'].forEach(s=>{
+    document.getElementById(s).classList.toggle('active', s===id);
+  });
+}
+function showPopup(id){ document.getElementById(id).classList.add('active'); }
+function hidePopup(id){ document.getElementById(id).classList.remove('active'); }
+
+// ════════════════════════════════════════════════════
+//  설정 함수
+// ════════════════════════════════════════════════════
+function setMode(m){
+  MODE=m;
+  document.getElementById('bm1').className='sel-btn'+(m===1?' on':'');
+  document.getElementById('bm2').className='sel-btn m2'+(m===2?' on':'');
+}
+function setStep(s){
+  STEP=s;
+  document.getElementById('bs1').className='sel-btn s1'+(s===1?' on':'');
+  document.getElementById('bs2').className='sel-btn s2'+(s===2?' on':'');
+  document.getElementById('inst').textContent=s===1
+    ?'물방울을 잡으면 점수 UP! 연속으로 잡으면 콤보~ 💦'
+    :'💧 내 오브젝트=+점수  🍂 낙엽=-점수! 낙엽을 피하세요~';
+}
+function setT(t){
+  SEL_TIME=t;
+  document.getElementById('tinput').value=String(t);
+}
+
+// ════════════════════════════════════════════════════
+//  꽃 선택
+// ════════════════════════════════════════════════════
+
+// ── 꽃 아이콘: 게임 내 Canvas와 동일한 그리기 함수로 SVG 생성 ──
+function makeFlowerIcon(key){
+  const size=42;
+  const c=document.createElement('canvas');
+  c.width=size; c.height=size;
+  const ctx=c.getContext('2d');
+  const fd=FL[key];
+  const r=13;
+  ctx.translate(size/2,size/2);
+  const fill=fd.fills[0], strk=fd.strks[0];
+  ctx.globalAlpha=1;
+
+  if(key==='sun'){
+    const rays=12;
+    for(let i=0;i<rays;i++){
+      ctx.save(); ctx.rotate(i*(360/rays)*Math.PI/180);
+      ctx.beginPath();
+      ctx.moveTo(-r*.16,-r*.78); ctx.lineTo(0,-r*1.28); ctx.lineTo(r*.16,-r*.78);
+      ctx.closePath();
+      ctx.fillStyle=fill; ctx.strokeStyle=strk; ctx.lineWidth=1;
+      ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(0,0,r*.78,0,Math.PI*2);
+    ctx.fillStyle=fill; ctx.strokeStyle=strk; ctx.lineWidth=1.2; ctx.fill(); ctx.stroke();
+    ctx.fillStyle=strk;
+    ctx.beginPath(); ctx.arc(-r*.26,-r*.16,r*.09,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r*.26,-r*.16,r*.09,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=strk; ctx.lineWidth=r*.08; ctx.lineCap='round';
+    ctx.beginPath(); ctx.arc(0,r*.04,r*.32,0.18*Math.PI,0.82*Math.PI); ctx.stroke();
+  } else if(key==='drop'){
+    ctx.beginPath();
+    ctx.moveTo(0,-r*1.15);
+    ctx.bezierCurveTo(r*.92,-r*.15, r*.78,r*1.05, 0,r*1.05);
+    ctx.bezierCurveTo(-r*.78,r*1.05, -r*.92,-r*.15, 0,-r*1.15);
+    ctx.closePath();
+    ctx.fillStyle=fill; ctx.strokeStyle=strk; ctx.lineWidth=1.2; ctx.fill(); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.6)';
+    ctx.beginPath(); ctx.ellipse(-r*.28,r*.2,r*.16,r*.32,-0.3,0,Math.PI*2); ctx.fill();
+  } else if(key==='cloud'){
+    ctx.beginPath();
+    ctx.moveTo(-r*1.1, r*.5);
+    ctx.bezierCurveTo(-r*1.42,r*.5, -r*1.4,-r*.05, -r*1.02,-r*.2);
+    ctx.bezierCurveTo(-r*1.06,-r*.7, -r*.5,-r*.92, -r*.18,-r*.55);
+    ctx.bezierCurveTo(-r*.02,-r*1.12, r*.55,-r*1.12, r*.72,-r*.55);
+    ctx.bezierCurveTo(r*.92,-r*.92, r*1.4,-r*.62, r*1.16,-r*.05);
+    ctx.bezierCurveTo(r*1.48,r*.02, r*1.42,r*.5, r*1.1,r*.5);
+    ctx.closePath();
+    ctx.fillStyle=fill; ctx.strokeStyle=strk; ctx.lineWidth=1.3; ctx.lineJoin='round';
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.4)';
+    ctx.beginPath(); ctx.ellipse(r*.15,-r*.4,r*.32,r*.22,0,0,Math.PI*2); ctx.fill();
+  }
+
+  return `<img src="${c.toDataURL()}" width="42" height="42" style="display:block;margin:0 auto 3px">`;
+}
+
+function openFP(){
+  fpStep=0;
+  chosen=['',''];
+  renderFP();
+  showPopup('fpop');
+}
+function renderFP(){
+  const p2=(MODE===2&&fpStep===1);
+  document.getElementById('fp-who').textContent=p2?'☁️ 플레이어 2':'💧 플레이어 1';
+  document.getElementById('fp-who').className='fp-who '+(p2?'w2':'w1');
+  document.getElementById('fp-sub').textContent=MODE===2
+    ?(fpStep===0?'P1이 먼저 골라요!':'P2가 골라요!')
+    :'햇님·물방울·구름 중에 골라요!';
+  const g=document.getElementById('fp-grid');
+  g.innerHTML='';
+  Object.entries(FL).forEach(([k,f])=>{
+    const b=document.createElement('button');
+    b.className='fp-btn'+(chosen[fpStep]===k?' on':'');
+    const ic=makeFlowerIcon(k);
+    b.innerHTML=`<span class="fp-ico">${ic}</span><span class="fp-name">${f.name}</span>`;
+    b.onclick=()=>{ chosen[fpStep]=k; renderFP(); };
+    g.appendChild(b);
+  });
+}
+function fpConfirm(){
+  if(!chosen[fpStep]){ alert('하나를 골라주세요!'); return; }
+  if(MODE===2&&fpStep===0){ fpStep=1; renderFP(); return; }
+  if(MODE===1) chosen[1]=chosen[0];
+  FD[0]=FL[chosen[0]]; FD[1]=FL[chosen[1]];
+  hidePopup('fpop');
+  showPopup('cpop');
+}
+
+// ════════════════════════════════════════════════════
+//  꽃잎 그리기
+// ════════════════════════════════════════════════════
+function drawFlower(ctx, pid, r, fill, strk){
+  const k=chosen[pid]||'sun', fd=FD[pid];
+  if(k==='sun'){
+    // 햇님: 삐죽한 광선 12개 + 둥근 본체
+    const rays=12;
+    for(let i=0;i<rays;i++){
+      ctx.save(); ctx.rotate(i*(360/rays)*Math.PI/180);
+      ctx.beginPath();
+      ctx.moveTo(-r*.16,-r*.78);
+      ctx.lineTo(0,-r*1.28);
+      ctx.lineTo(r*.16,-r*.78);
+      ctx.closePath();
+      ctx.fillStyle=fill; ctx.strokeStyle=strk; ctx.lineWidth=1;
+      ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(0,0,r*.78,0,Math.PI*2);
+    ctx.fillStyle=fill; ctx.strokeStyle=strk; ctx.lineWidth=1.4;
+    ctx.fill(); ctx.stroke();
+    // 볼 + 미소
+    ctx.fillStyle='rgba(255,150,0,.35)';
+    ctx.beginPath(); ctx.arc(-r*.32,r*.12,r*.13,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r*.32,r*.12,r*.13,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=strk; ctx.lineWidth=Math.max(1,r*.07); ctx.lineCap='round';
+    ctx.beginPath(); ctx.arc(0,r*.02,r*.34,0.18*Math.PI,0.82*Math.PI); ctx.stroke();
+    ctx.fillStyle=strk;
+    ctx.beginPath(); ctx.arc(-r*.28,-r*.18,r*.09,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r*.28,-r*.18,r*.09,0,Math.PI*2); ctx.fill();
+    return; // 햇님은 중심 원 생략
+  } else if(k==='drop'){
+    // 물방울: 위 뾰족, 아래 둥근 눈물방울
+    ctx.beginPath();
+    ctx.moveTo(0,-r*1.15);
+    ctx.bezierCurveTo(r*.92,-r*.15, r*.78,r*1.05, 0,r*1.05);
+    ctx.bezierCurveTo(-r*.78,r*1.05, -r*.92,-r*.15, 0,-r*1.15);
+    ctx.closePath();
+    ctx.fillStyle=fill; ctx.strokeStyle=strk; ctx.lineWidth=1.4;
+    ctx.fill(); ctx.stroke();
+    // 하이라이트 반짝
+    ctx.fillStyle='rgba(255,255,255,.6)';
+    ctx.beginPath(); ctx.ellipse(-r*.28,r*.2,r*.18,r*.34,-0.3,0,Math.PI*2); ctx.fill();
+    return;
+  } else if(k==='cloud'){
+    // 구름: 윤곽선이 한 줄로 이어지는 단일 닫힌 path (봉우리 3개, 골은 완만)
+    ctx.beginPath();
+    ctx.moveTo(-r*1.1, r*.5);
+    ctx.bezierCurveTo(-r*1.42,r*.5, -r*1.4,-r*.05, -r*1.02,-r*.2);
+    ctx.bezierCurveTo(-r*1.06,-r*.7, -r*.5,-r*.92, -r*.18,-r*.55);
+    ctx.bezierCurveTo(-r*.02,-r*1.12, r*.55,-r*1.12, r*.72,-r*.55);
+    ctx.bezierCurveTo(r*.92,-r*.92, r*1.4,-r*.62, r*1.16,-r*.05);
+    ctx.bezierCurveTo(r*1.48,r*.02, r*1.42,r*.5, r*1.1,r*.5);
+    ctx.closePath();
+    ctx.fillStyle=fill; ctx.strokeStyle=strk; ctx.lineWidth=Math.max(1.2,r*.09);
+    ctx.lineJoin='round';
+    ctx.fill(); ctx.stroke();
+    // 보송한 하이라이트
+    ctx.fillStyle='rgba(255,255,255,.4)';
+    ctx.beginPath(); ctx.ellipse(r*.15,-r*.4,r*.36,r*.24,0,0,Math.PI*2); ctx.fill();
+    return;
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  꽃잎 / 파티클 클래스
+// ════════════════════════════════════════════════════
+class Petal{
+  constructor(pid, isLeaf){
+    this.pid=pid; this.leaf=!!isLeaf;
+    this.x=Math.random()*CW; this.y=-20;
+    this.r=isLeaf?9+Math.random()*6:12+Math.random()*10;
+    this.rot=Math.random()*Math.PI*2;
+    this.rv=(Math.random()-.5)*.04;
+    this.sw=Math.random()*Math.PI*2;
+    this.ss=.013+Math.random()*.016;
+    this.sa=.7+Math.random()*1.2;
+    this.vy=2.6+Math.random()*2.2;
+    this.vx=(Math.random()-.5)*1.1;
+    this.a=0; this.caught=false; this.ct=0;
+    const fd=FD[pid];
+    if(isLeaf){
+      this.fill=GF[Math.random()*GF.length|0];
+      this.strk=GS[Math.random()*GS.length|0];
+      this.pts=-(8+Math.round(this.r));
+    } else {
+      this.fill=fd.fills[Math.random()*fd.fills.length|0];
+      this.strk=fd.strks[Math.random()*fd.strks.length|0];
+      this.pts=8+Math.round(this.r);
+    }
+  }
+  step(){
+    if(this.caught){
+      this.ct+=.09; this.y-=2.3;
+      this.a=Math.max(0,1-this.ct*1.05);
+      return false;
+    }
+    this.sw+=this.ss;
+    this.x+=Math.sin(this.sw)*this.sa+this.vx;
+    this.y+=this.vy; this.rot+=this.rv;
+    this.a=Math.min(1,this.a+.07);
+    return this.y>CH+40;
+  }
+  draw(ctx){
+    ctx.save(); ctx.globalAlpha=this.a;
+    ctx.translate(this.x,this.y); ctx.rotate(this.rot);
+    if(this.caught){ const s=1+this.ct*.75; ctx.scale(s,s); }
+    if(this.leaf){
+      ctx.beginPath(); ctx.ellipse(0,0,this.r*.46,this.r*1.1,0,0,Math.PI*2);
+      ctx.fillStyle=this.fill; ctx.strokeStyle=this.strk; ctx.lineWidth=1;
+      ctx.fill(); ctx.stroke();
+    } else {
+      drawFlower(ctx,this.pid,this.r,this.fill,this.strk);
+    }
+    ctx.restore();
+  }
+  hit(hand){
+    if(!hand||!hand.length) return false;
+    const t=(this.r+22)**2;
+    for(const p of hand){
+      if((this.x-p.x)**2+(this.y-p.y)**2<t) return true;
+    }
+    return false;
+  }
+}
+class Part{
+  constructor(x,y,c){
+    this.x=x; this.y=y; this.c=c;
+    this.vx=(Math.random()-.5)*7;
+    this.vy=-Math.random()*5-1.5;
+    this.r=2+Math.random()*3; this.a=1;
+  }
+  step(){ this.x+=this.vx; this.y+=this.vy; this.vy+=.18; this.a-=.027; return this.a<=0; }
+  draw(ctx){ ctx.save(); ctx.globalAlpha=this.a; ctx.fillStyle=this.c;
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+}
+
+// ════════════════════════════════════════════════════
+//  마우스 / 터치 (항상 등록, running 체크로 제어)
+// ════════════════════════════════════════════════════
+function updMouse(x,y){
+  if(!running) return;
+  if(MODE===1){
+    PS[0].hand=[{x,y}];
+  } else {
+    const half=window.innerWidth/2;
+    if(x<half) PS[0].hand=[{x:x,         y:y}];
+    else        PS[1].hand=[{x:x-half,    y:y}];
+  }
+}
+document.addEventListener('mousemove', e=>updMouse(e.clientX,e.clientY));
+document.addEventListener('touchmove', e=>{
+  e.preventDefault();
+  Array.from(e.touches).forEach(t=>updMouse(t.clientX,t.clientY));
+},{passive:false});
+document.addEventListener('touchstart', e=>{
+  Array.from(e.touches).forEach(t=>updMouse(t.clientX,t.clientY));
+});
+document.addEventListener('mouseleave', ()=>{ PS[0].hand=[]; PS[1].hand=[]; });
+
+// ════════════════════════════════════════════════════
+//  카메라 & MediaPipe
+// ════════════════════════════════════════════════════
+async function getCamera(){
+  const v1=document.getElementById('vid1');
+  const v2=document.getElementById('vid2');
+  let stream=null;
+  for(const c of [
+    {video:{width:{ideal:320},height:{ideal:240}}},
+    {video:true}
+  ]){
+    try{ stream=await navigator.mediaDevices.getUserMedia(c); break; }
+    catch(e){ console.warn('cam try fail',e); }
+  }
+  if(!stream) throw Object.assign(new Error('no cam'),{name:'NotFoundError'});
+  v1.srcObject=stream; v1.style.display='block';
+  v2.srcObject=stream; v2.style.display='block';
+  return new Promise((res,rej)=>{
+    const to=setTimeout(()=>v1.readyState>=1?res(v1):rej(new Error('timeout')),5000);
+    v1.onloadedmetadata=()=>{ clearTimeout(to); res(v1); };
+  });
+}
+
+function loadMP(){
+  return new Promise(res=>{
+    if(window.Hands){ res(); return; }
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
+    s.crossOrigin='anonymous'; s.onload=res;
+    document.head.appendChild(s);
+  });
+}
+
+
+// ── 기기 성능 자동 감지 ──────────────────────────────
+// 첫 몇 프레임 rAF 간격으로 fps 측정 → 저사양 자동 감지
+let deviceTier = 'high'; // 'high' | 'mid' | 'low'
+
+function detectPerformance(){
+  return new Promise(res=>{
+    const samples=[];
+    let last=performance.now();
+    let count=0;
+    function measure(ts){
+      samples.push(ts-last); last=ts; count++;
+      if(count<30){ requestAnimationFrame(measure); return; }
+      const avg=samples.slice(10).reduce((a,b)=>a+b,0)/20; // 앞 10개 제외(워밍업)
+      if(avg>25)      deviceTier='low';   // ~40fps 이하
+      else if(avg>18) deviceTier='mid';   // ~55fps 이하
+      else            deviceTier='high';  // ~60fps
+      console.log(`[성능감지] avg=${avg.toFixed(1)}ms → ${deviceTier}`);
+      res();
+    }
+    requestAnimationFrame(measure);
+  });
+}
+
+async function initHands(video){
+  await loadMP();
+
+  const maxH=2; // 1인/2인 모두 양손 인식
+
+  // 성능 감지 후 설정 조정
+  await detectPerformance();
+  const isLow = deviceTier==='low';
+  const isMid = deviceTier==='mid';
+
+  const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+  hands.setOptions({
+    maxNumHands: maxH,
+    modelComplexity: isLow ? 0 : 0,   // 항상 lite (0이 가장 가벼움)
+    minDetectionConfidence: isLow ? 0.3 : 0.4,
+    minTrackingConfidence:  isLow ? 0.3 : 0.4,
+  });
+
+  hands.onResults(res=>{
+    PS[0].hand=[]; PS[1].hand=[];
+    const W=CW, H=CH;
+    (res.multiHandLandmarks||[]).forEach(lms=>{
+      // MediaPipe 좌표: l.x, l.y 는 0~1 (원본 카메라 기준, 미러 아님)
+      // 화면에 scaleX(-1) 적용했으므로 x를 (1-l.x)로 반전
+      // 1인 모드: CW=전체 너비 → (1-l.x)*CW, l.y*CH
+      // 2인 모드: CW=절반 너비
+      //   - 카메라 왼쪽(l.x<0.5) → 미러 후 오른쪽 → P2
+      //   - 카메라 오른쪽(l.x>0.5) → 미러 후 왼쪽 → P1
+      //   zone 좌표로: P1=(1-l.x)*2*CW, P2=(l.x-0.5)*2*CW (단, CW=절반너비)
+      //   정리: P1 zone x = (1-l.x)*fullW - 0       단 0~CW 클램프
+      //         P2 zone x = (1-l.x)*fullW - CW       단 0~CW 클램프
+      if(MODE===1){
+        // 1인: 단순 미러 반전
+        PS[0].hand.push(...lms.map(l=>({x:(1-l.x)*W, y:l.y*H})));
+      } else {
+        // 2인: 전체 화면 x 기준으로 절반 분리
+        const fullW=W*2; // 전체 너비 = zone너비*2
+        const fullX_center=(1-lms.reduce((s,l)=>s+l.x,0)/lms.length)*fullW;
+        if(fullX_center < fullW/2){
+          // 왼쪽 영역 → P1
+          PS[0].hand.push(...lms.map(l=>({
+            x: (1-l.x)*fullW,       // 전체 화면 기준 x
+            y: l.y*H
+          })));
+        } else {
+          // 오른쪽 영역 → P2: zone2 상대 좌표
+          PS[1].hand.push(...lms.map(l=>({
+            x: (1-l.x)*fullW - fullW/2,  // zone2 내 상대 x
+            y: l.y*H
+          })));
+        }
+      }
+    });
+  });
+
+  // 오프스크린: tier에 따라 해상도 조정
+  const off=document.createElement('canvas');
+  const offW = isLow ? 160 : isMid ? 240 : 320;
+  const offH = isLow ? 120 : isMid ? 180 : 240;
+  off.width=offW; off.height=offH;
+  const offCtx=off.getContext('2d');
+  let busy=false;
+
+  window._htStart=function(){
+    // 저사양일수록 간격 늘려서 CPU 부담 줄임
+    const base = isLow ? 200 : isMid ? 150 : 100;
+    const interval = MODE===2 ? base+40 : base;
+    function tick(){
+      if(!running) return;
+      if(!busy && video.readyState>=2){  // 비디오 준비됐을 때만
+        busy=true;
+        try{
+          // 웹캠 화면 중앙 80%만 크롭해서 전송 → 배경 노이즈 줄임
+          const vw=video.videoWidth||320, vh=video.videoHeight||240;
+          const cropX=vw*0.1, cropY=vh*0.1;
+          const cropW=vw*0.8, cropH=vh*0.8;
+          offCtx.drawImage(video, cropX,cropY,cropW,cropH, 0,0,offW,offH);
+          hands.send({image:off})
+            .then(()=>{ busy=false; })
+            .catch(()=>{ busy=false; });
+        }catch(e){ busy=false; }
+      }
+      setTimeout(tick,interval);
+    }
+    tick();
+  };
+}
+
+// ════════════════════════════════════════════════════
+//  HUD
+// ════════════════════════════════════════════════════
+const H_CFG=[
+  {sc:'sc1',tm:'tm1',tb:'tb1',cb:'cb1',cn:'cn1',cm:'cm1'},
+  {sc:'sc2',tm:'tm2',tb:'tb2',cb:'cb2',cn:'cn2',cm:'cm2'},
+];
+function getM(c){ return c>=10?5:c>=7?4:c>=5?3:c>=3?2:1; }
+function updHUD(pid){
+  const p=PS[pid], h=H_CFG[pid];
+  document.getElementById(h.sc).textContent=p.score.toLocaleString();
+  document.getElementById(h.tm).textContent=p.tLeft;
+  document.getElementById(h.tm).className='ztimer'+(p.tLeft<=10?' urg':'');
+  document.getElementById(h.tb).style.width=(p.tLeft/DURATION*100)+'%';
+}
+let comboTO=[null,null];
+function updCombo(pid){
+  const p=PS[pid], h=H_CFG[pid];
+  if(p.combo>=2){
+    document.getElementById(h.cb).classList.add('show');
+    document.getElementById(h.cn).textContent=p.combo;
+    document.getElementById(h.cm).textContent='(×'+getM(p.combo)+'배)';
+    clearTimeout(comboTO[pid]);
+    comboTO[pid]=setTimeout(()=>{
+      p.combo=0; document.getElementById(h.cb).classList.remove('show');
+    },2200);
+  } else {
+    document.getElementById(h.cb).classList.remove('show');
+  }
+}
+const popZ=[document.getElementById('z1'),document.getElementById('z2')];
+function addPop(pid,x,y,pts){
+  const d=document.createElement('div');
+  d.className='spop '+(pts>0?(pid===0?'p1':'p2'):'bad');
+  d.textContent=(pts>0?'+':'')+pts;
+  d.style.cssText=`left:${Math.max(0,x-16)}px;top:${Math.max(0,y-16)}px`;
+  popZ[pid].appendChild(d);
+  setTimeout(()=>d.remove(),820);
+}
+
+// ════════════════════════════════════════════════════
+//  게임 루프
+// ════════════════════════════════════════════════════
+const GAP=[110,167]; // STEP1, STEP2
+
+function loopOne(pid, dt){
+  const p=PS[pid];
+  if(p.tLeft<=0) return;
+  const gap=GAP[STEP-1];
+  p.acc+=Math.min(dt,100); // dt 최대 100ms로 제한 → 버벅여도 꽃잎 폭발 방지
+  if(p.acc>=gap){
+    p.petals.push(new Petal(pid, STEP===2&&Math.random()<0.3));
+    p.acc=0; // 누적값 초기화
+  }
+  const ctx=pid===0?ctx1:ctx2;
+  ctx.clearRect(0,0,CW,CH);
+  // 꽃잎
+  const rm=[];
+  p.petals.forEach((petal,i)=>{
+    if(!petal.caught&&petal.hit(p.hand)){
+      petal.caught=true;
+      if(petal.pts>0){
+        p.combo++; p.maxC=Math.max(p.maxC,p.combo);
+        const fp=petal.pts*getM(p.combo); p.score+=fp;
+        addPop(pid,petal.x,petal.y,fp); updCombo(pid);
+        const fc=FD[pid].fills;
+        for(let j=0;j<5;j++) p.parts.push(new Part(petal.x,petal.y,fc[j%fc.length]));
+      } else {
+        p.score=Math.max(0,p.score+petal.pts);
+        p.combo=0; updCombo(pid);
+        addPop(pid,petal.x,petal.y,petal.pts);
+        for(let j=0;j<4;j++) p.parts.push(new Part(petal.x,petal.y,GF[j%GF.length]));
+      }
+    }
+    if(petal.step()||(petal.caught&&petal.a<=0)){
+      if(!petal.caught&&!petal.leaf){p.combo=0;updCombo(pid);}
+      rm.push(i);
+    } else petal.draw(ctx);
+  });
+  for(let i=rm.length-1;i>=0;i--) p.petals.splice(rm[i],1);
+  // 파티클
+  const pr=[];
+  p.parts.forEach((pt,i)=>{ if(pt.step()) pr.push(i); else pt.draw(ctx); });
+  for(let i=pr.length-1;i>=0;i--) p.parts.splice(pr[i],1);
+}
+
+function loop(ts){
+  if(!running) return;
+  const dt=ts-lastTs; lastTs=ts;
+  const n=MODE===1?1:2;
+  for(let i=0;i<n;i++) loopOne(i,dt);
+  if(ts-hudTs>400){ for(let i=0;i<n;i++) updHUD(i); hudTs=ts; }
+  requestAnimationFrame(loop);
+}
+
+function tickTimer(){
+  const n=MODE===1?1:2;
+  let done=true;
+  for(let i=0;i<n;i++){ PS[i].tLeft--; if(PS[i].tLeft>0) done=false; }
+  if(done) endGame();
+}
+
+// ════════════════════════════════════════════════════
+//  게임 시작 / 종료
+// ════════════════════════════════════════════════════
+function onStart(){
+  const v=parseInt(document.getElementById('tinput').value,10);
+  SEL_TIME=(!isNaN(v)&&v>=5)?v:60;
+  document.getElementById('startscreen').classList.remove('active');
+  openFP();
+}
+
+async function camAllow(){
+  hidePopup('cpop');
+  showScreen('loading');
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
+      throw Object.assign(new Error('no api'),{name:'NotFoundError'});
+    const v=await getCamera();
+    await initHands(v);
+  } catch(e){
+    console.warn('cam fail',e);
+    const msgs={
+      NotAllowedError:'카메라 권한이 거부됐어요.',
+      NotFoundError:'카메라를 찾을 수 없어요.',
+      NotReadableError:'카메라가 다른 앱에서 사용 중이에요.',
+    };
+    document.getElementById('ltxt').textContent=(msgs[e.name]||'카메라를 열 수 없어요.')+' 마우스로 플레이합니다 🖱️';
+    document.getElementById('lsub').textContent='잠시 후 시작됩니다...';
+    await new Promise(r=>setTimeout(r,1800));
+  }
+  beginGame();
+}
+function camSkip(){
+  hidePopup('cpop');
+  beginGame();
+}
+
+function beginGame(){
+  DURATION=SEL_TIME;
+  // 레이아웃
+  const z1=document.getElementById('z1');
+  const z2=document.getElementById('z2');
+  const dv=document.getElementById('divider');
+  z1.style.width=MODE===1?'100%':'50%';
+  z2.style.width='50%';
+  z2.style.display=MODE===2?'block':'none';
+  dv.style.display=MODE===2?'block':'none';
+  document.getElementById('rc2').style.display=MODE===2?'':'none';
+  // 웹캠 크기: 2인은 200%(각 zone이 절반 클리핑), 1인은 100%
+  document.querySelectorAll('.zvid').forEach(v=>{
+    v.style.width=MODE===2?'200%':'100%';
+    v.style.left=MODE===2?(v.id==='vid2'?'-100%':'0'):'0';
+  });
+  // 캔버스 크기
+  updateCanvasSize();
+  // 플레이어 초기화
+  const n=MODE===1?1:2;
+  for(let i=0;i<2;i++){
+    PS[i].score=0; PS[i].combo=0; PS[i].maxC=0;
+    PS[i].tLeft=DURATION;
+    PS[i].petals=[]; PS[i].parts=[]; PS[i].acc=0; PS[i].hand=[];
+    clearTimeout(comboTO[i]);
+    const h=H_CFG[i];
+    document.getElementById(h.tb).style.width='100%';
+    document.getElementById(h.tb).style.background=FD[i].tbar;
+    document.getElementById(h.cb).classList.remove('show');
+    updHUD(i);
+  }
+  lastTs=0; hudTs=0; running=true;
+  // 게임화면 표시
+  showScreen(null); // 모든 오버레이 숨기기
+  document.getElementById('game').style.display='block';
+  // 손인식 시작
+  if(window._htStart) window._htStart();
+  clearInterval(timerInt);
+  timerInt=setInterval(tickTimer,1000);
+  requestAnimationFrame(loop);
+}
+
+function endGame(){
+  running=false; clearInterval(timerInt);
+  PS.forEach(p=>p.hand=[]);
+  ctx1.clearRect(0,0,CW,CH); ctx2.clearRect(0,0,CW,CH);
+  // 결과
+  document.getElementById('rs1').textContent=PS[0].score.toLocaleString();
+  document.getElementById('rmc1').textContent=PS[0].maxC;
+  let wtxt='💧 수고했어요!', wcol='#2a90e0';
+  document.getElementById('rc1').classList.remove('win');
+  document.getElementById('rc2').classList.remove('win');
+  if(MODE===2){
+    document.getElementById('rs2').textContent=PS[1].score.toLocaleString();
+    document.getElementById('rmc2').textContent=PS[1].maxC;
+    document.getElementById('rc2').style.display='';
+    if(PS[0].score>PS[1].score){
+      wtxt='💧 플레이어 1 승리!'; wcol='#2a90e0';
+      document.getElementById('rc1').classList.add('win');
+    } else if(PS[1].score>PS[0].score){
+      wtxt='☁️ 플레이어 2 승리!'; wcol='#2a90e0';
+      document.getElementById('rc2').classList.add('win');
+    } else {
+      wtxt='🤝 무승부!'; wcol='#c47c5a';
+    }
+  }
+  const wt=document.getElementById('win-txt');
+  wt.textContent=wtxt; wt.style.color=wcol;
+  spawnDeco('rdeco',16);
+  showScreen('result');
+}
+
+function retry(){
+  document.getElementById('rdeco').innerHTML='';
+  beginGame();
+}
+function goHome(){
+  running=false; clearInterval(timerInt);
+  document.getElementById('rdeco').innerHTML='';
+  ctx1.clearRect(0,0,CW,CH); ctx2.clearRect(0,0,CW,CH);
+  PS.forEach(p=>p.hand=[]);
+  document.getElementById('game').style.display='none';
+  // 레이아웃 원복
+  document.getElementById('z1').style.width='100%';
+  document.getElementById('z2').style.display='none';
+  document.getElementById('divider').style.display='none';
+  // 시작화면
+  showScreen('startscreen');
+}
+
+// ════════════════════════════════════════════════════
+//  데코 꽃잎 (시작/결과 화면)
+// ════════════════════════════════════════════════════
+function spawnDeco(id,n){
+  const c=document.getElementById(id); if(!c) return;
+  c.innerHTML='';
+  const fills=['#7ec8ff','#a0d8ff','#56b4f7'];
+  for(let i=0;i<n;i++){
+    const d=document.createElement('div');
+    d.className='deco-petal';
+    d.style.cssText=`left:${Math.random()*100}%;animation-duration:${4+Math.random()*7}s;animation-delay:${Math.random()*10}s;opacity:${.35+Math.random()*.45}`;
+    const sz=12+Math.random()*12|0, f=fills[i%3], r=sz*.5;
+    // 물방울 모양 path
+    const path=`M0,${(-r*1.15).toFixed(1)} C${(r*.92).toFixed(1)},${(-r*.15).toFixed(1)} ${(r*.78).toFixed(1)},${(r*1.05).toFixed(1)} 0,${(r*1.05).toFixed(1)} C${(-r*.78).toFixed(1)},${(r*1.05).toFixed(1)} ${(-r*.92).toFixed(1)},${(-r*.15).toFixed(1)} 0,${(-r*1.15).toFixed(1)} Z`;
+    d.innerHTML=`<svg xmlns="http://www.w3.org/2000/svg" width="${sz}" height="${sz}" viewBox="${-sz/2} ${-sz/2} ${sz} ${sz}"><path d="${path}" fill="${f}" stroke="#2a90e0" stroke-width="1" opacity=".92"/><ellipse cx="${(-r*.28).toFixed(1)}" cy="${(r*.2).toFixed(1)}" rx="${(r*.16).toFixed(1)}" ry="${(r*.3).toFixed(1)}" fill="#ffffff" opacity=".55"/></svg>`;
+    c.appendChild(d);
+  }
+}
+spawnDeco('sdeco',18);
+</script>
+</body>
+</html>
