@@ -813,8 +813,18 @@ async function initHands(video){
       }
       setTimeout(tick,interval);
     }
-    tick();
+    // 첫 손인식은 300ms 뒤에 시작 → 게임 화면/HUD가 먼저 매끄럽게 렌더됨
+    setTimeout(tick,300);
   };
+
+  // ── 모델 예열(warm-up) ──────────────────────────────
+  // 첫 hands.send()는 WASM 모델 초기화로 수백 ms~1초 걸림.
+  // 로딩 화면이 떠 있는 지금 미리 1회 실행해두면, 실제 게임 시작 때 끊김 없음.
+  try{
+    const vw=video.videoWidth||320, vh=video.videoHeight||240;
+    offCtx.drawImage(video, vw*0.1,vh*0.1, vw*0.8,vh*0.8, 0,0,offW,offH);
+    await hands.send({image:off});   // 첫 무거운 추론을 로딩 단계에서 소화
+  }catch(e){ /* 예열 실패해도 게임엔 지장 없음 */ }
 }
 
 // ════════════════════════════════════════════════════
@@ -936,7 +946,12 @@ async function camAllow(){
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
       throw Object.assign(new Error('no api'),{name:'NotFoundError'});
     const v=await getCamera();
+    document.getElementById('ltxt').textContent='손 인식 준비 중...';
+    document.getElementById('lsub').textContent='잠시만 기다려주세요!';
     await initHands(v);
+    document.getElementById('ltxt').textContent='준비 완료! 💧';
+    document.getElementById('lsub').textContent='곧 시작합니다~';
+    await new Promise(r=>setTimeout(r,400));
   } catch(e){
     console.warn('cam fail',e);
     const msgs={
