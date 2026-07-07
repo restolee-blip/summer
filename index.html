@@ -630,7 +630,8 @@ class Petal{
   }
   hit(hand){
     if(!hand||!hand.length) return false;
-    const t=(this.r+22)**2;
+    // hand = [검지끝, 손바닥중심] 2점. 둘 중 하나라도 반경 안이면 잡힘.
+    const t=(this.r+38)**2;
     for(const p of hand){
       if((this.x-p.x)**2+(this.y-p.y)**2<t) return true;
     }
@@ -739,49 +740,73 @@ async function initHands(video){
   const isLow = deviceTier==='low';
   const isMid = deviceTier==='mid';
 
+  // ── 크롭 비율: drawImage와 좌표변환이 반드시 같은 값을 써야 함 ──
+  const CROP = 0.1;              // 가장자리 10%씩 잘라냄
+  const SPAN = 1 - CROP*2;       // 남는 영역 비율 (0.8)
+  // MediaPipe가 준 좌표(잘린 영상 0~1 기준)를 원본 영상 0~1 기준으로 복원:
+  //   origX = CROP + lx*SPAN   (lx: 크롭 영상 기준 0~1)
+  const toFull = lx => CROP + lx*SPAN;
+
+  // ── 판정점 스무딩(떨림 완화)용 이전 좌표 저장 ──
+  const smooth=[{},{}]; // [pid]: {tip:{x,y}, palm:{x,y}}
+  const SM=0.5;         // 0=즉시반응, 1=완전정지. 클수록 부드럽지만 느림
+  function smoothPt(pid,key,x,y){
+    const s=smooth[pid];
+    if(!s[key]){ s[key]={x,y}; return s[key]; }
+    s[key].x += (x-s[key].x)*(1-SM);
+    s[key].y += (y-s[key].y)*(1-SM);
+    return s[key];
+  }
+
   const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
   hands.setOptions({
     maxNumHands: maxH,
     modelComplexity: isLow ? 0 : 0,   // 항상 lite (0이 가장 가벼움)
-    minDetectionConfidence: isLow ? 0.3 : 0.4,
-    minTrackingConfidence:  isLow ? 0.3 : 0.4,
+    minDetectionConfidence: isLow ? 0.4 : 0.5,
+    minTrackingConfidence:  isLow ? 0.4 : 0.5,
   });
 
   hands.onResults(res=>{
     PS[0].hand=[]; PS[1].hand=[];
     const W=CW, H=CH;
-    (res.multiHandLandmarks||[]).forEach(lms=>{
-      // MediaPipe 좌표: l.x, l.y 는 0~1 (원본 카메라 기준, 미러 아님)
-      // 화면에 scaleX(-1) 적용했으므로 x를 (1-l.x)로 반전
-      // 1인 모드: CW=전체 너비 → (1-l.x)*CW, l.y*CH
-      // 2인 모드: CW=절반 너비
-      //   - 카메라 왼쪽(l.x<0.5) → 미러 후 오른쪽 → P2
-      //   - 카메라 오른쪽(l.x>0.5) → 미러 후 왼쪽 → P1
-      //   zone 좌표로: P1=(1-l.x)*2*CW, P2=(l.x-0.5)*2*CW (단, CW=절반너비)
-      //   정리: P1 zone x = (1-l.x)*fullW - 0       단 0~CW 클램프
-      //         P2 zone x = (1-l.x)*fullW - CW       단 0~CW 클램프
+    const lmSets = res.multiHandLandmarks||[];
+
+    // 각 손에서 판정점 2개만 추출: 검지끝(8) + 손바닥중심(0,5,9,13,17 평균)
+    // 좌표는 crop 보정(toFull) 후 미러 반전((1-x)) 적용
+    const palmIdx=[0,5,9,13,17];
+    lmSets.forEach((lms, hi)=>{
+      // 원본 영상 기준(0~1) 값들
+      const tipRawX=toFull(lms[8].x),  tipRawY=toFull(lms[8].y);
+      let px=0,py=0; palmIdx.forEach(i=>{ px+=lms[i].x; py+=lms[i].y; });
+      px/=palmIdx.length; py/=palmIdx.length;
+      const palmRawX=toFull(px), palmRawY=toFull(py);
+      // 손 전체가 어느 zone인지 판단용 중심(손바닥 x)
+      const centerRawX = palmRawX;
+
       if(MODE===1){
-        // 1인: 단순 미러 반전
-        PS[0].hand.push(...lms.map(l=>({x:(1-l.x)*W, y:l.y*H})));
+        // 1인: 전체 화면 미러 반전
+        const tp=smoothPt(0,'tip', (1-tipRawX)*W, tipRawY*H);
+        const pl=smoothPt(0,'palm',(1-palmRawX)*W, palmRawY*H);
+        PS[0].hand.push({x:tp.x,y:tp.y},{x:pl.x,y:pl.y});
       } else {
-        // 2인: 전체 화면 x 기준으로 절반 분리
-        const fullW=W*2; // 전체 너비 = zone너비*2
-        const fullX_center=(1-lms.reduce((s,l)=>s+l.x,0)/lms.length)*fullW;
-        if(fullX_center < fullW/2){
-          // 왼쪽 영역 → P1
-          PS[0].hand.push(...lms.map(l=>({
-            x: (1-l.x)*fullW,       // 전체 화면 기준 x
-            y: l.y*H
-          })));
+        // 2인: 미러 반전된 화면 x로 좌우 zone 분리
+        const fullW=W*2;
+        const mirroredCenter=(1-centerRawX)*fullW; // 화면상 실제 x
+        if(mirroredCenter < fullW/2){
+          // 화면 왼쪽 → P1 (zone1 좌표 = 그대로)
+          const tp=smoothPt(0,'tip', (1-tipRawX)*fullW,      tipRawY*H);
+          const pl=smoothPt(0,'palm',(1-palmRawX)*fullW,     palmRawY*H);
+          PS[0].hand.push({x:tp.x,y:tp.y},{x:pl.x,y:pl.y});
         } else {
-          // 오른쪽 영역 → P2: zone2 상대 좌표
-          PS[1].hand.push(...lms.map(l=>({
-            x: (1-l.x)*fullW - fullW/2,  // zone2 내 상대 x
-            y: l.y*H
-          })));
+          // 화면 오른쪽 → P2 (zone2 상대좌표 = 화면x - 절반너비)
+          const tp=smoothPt(1,'tip', (1-tipRawX)*fullW-fullW/2,  tipRawY*H);
+          const pl=smoothPt(1,'palm',(1-palmRawX)*fullW-fullW/2, palmRawY*H);
+          PS[1].hand.push({x:tp.x,y:tp.y},{x:pl.x,y:pl.y});
         }
       }
     });
+    // 인식된 손이 없으면 스무딩 기록도 리셋(다음 등장 시 튐 방지)
+    if(lmSets.length===0){ smooth[0]={}; smooth[1]={}; }
   });
 
   // 오프스크린: tier에 따라 해상도 조정
@@ -801,10 +826,10 @@ async function initHands(video){
       if(!busy && video.readyState>=2){  // 비디오 준비됐을 때만
         busy=true;
         try{
-          // 웹캠 화면 중앙 80%만 크롭해서 전송 → 배경 노이즈 줄임
+          // 웹캠 중앙 (1-CROP*2) 영역만 전송 → 좌표변환의 toFull과 반드시 동일 비율
           const vw=video.videoWidth||320, vh=video.videoHeight||240;
-          const cropX=vw*0.1, cropY=vh*0.1;
-          const cropW=vw*0.8, cropH=vh*0.8;
+          const cropX=vw*CROP, cropY=vh*CROP;
+          const cropW=vw*SPAN, cropH=vh*SPAN;
           offCtx.drawImage(video, cropX,cropY,cropW,cropH, 0,0,offW,offH);
           hands.send({image:off})
             .then(()=>{ busy=false; })
@@ -822,7 +847,7 @@ async function initHands(video){
   // 로딩 화면이 떠 있는 지금 미리 1회 실행해두면, 실제 게임 시작 때 끊김 없음.
   try{
     const vw=video.videoWidth||320, vh=video.videoHeight||240;
-    offCtx.drawImage(video, vw*0.1,vh*0.1, vw*0.8,vh*0.8, 0,0,offW,offH);
+    offCtx.drawImage(video, vw*CROP,vh*CROP, vw*SPAN,vh*SPAN, 0,0,offW,offH);
     await hands.send({image:off});   // 첫 무거운 추론을 로딩 단계에서 소화
   }catch(e){ /* 예열 실패해도 게임엔 지장 없음 */ }
 }
